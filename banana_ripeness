@@ -1,0 +1,371 @@
+#Import packages
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Conv2D, Flatten, Dropout, MaxPooling2D
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+import zipfile
+import os
+import numpy as np
+import glob
+import shutil
+import matplotlib.pyplot as plt
+import zipfile
+from tensorflow.keras import regularizers
+from keras.layers import Dense,GlobalAveragePooling2D
+
+
+#Import packages
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Conv2D, Flatten, Dropout, MaxPooling2D
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+import zipfile
+import os
+import numpy as np
+import glob
+import shutil
+import matplotlib.pyplot as plt
+import zipfile
+from tensorflow.keras import regularizers
+import matplotlib.pyplot as plt
+from mlxtend.plotting import plot_confusion_matrix
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import accuracy_score
+from numpy import loadtxt
+from keras.models import load_model
+from keras.callbacks import EarlyStopping
+from keras.callbacks import ModelCheckpoint
+import keras
+from keras               import optimizers, regularizers
+from keras.models        import Sequential, Model
+from keras.layers        import merge, UpSampling1D, Add, Dense, Activation, Flatten, Dropout, Conv1D, MaxPooling1D, Input, BatchNormalization, Concatenate, Activation
+from keras.utils         import np_utils
+from keras.models        import model_from_json
+from keras.regularizers  import l1
+from keras import backend as K
+from sklearn.metrics     import confusion_matrix
+from pandas              import DataFrame
+from numpy import matlib
+from keras.layers import Dense, Activation, Flatten, Dropout, Conv1D, MaxPooling1D 
+from keras.utils import np_utils
+from sklearn.model_selection import KFold
+from keras.optimizers import Adam
+from keras.layers import Dense,GlobalAveragePooling2D
+
+!pip install -q -U tf-hub-nightly
+!pip install -q tfds-nightly
+import tensorflow_hub as hub
+from tensorflow.keras import layers
+
+from google.colab import drive
+from google.colab import files
+drive.mount('/content/drive/', force_remount=True)
+
+
+base_dir='/content/drive/MyDrive/NEW_FINAL_DATASET_350'
+classes = ['extra', 'primera', 'segunda']
+type(classes)
+
+
+#Path de entreno y validación
+train_dir = os.path.join(base_dir, 'train')
+print(train_dir)
+
+
+val_dir = os.path.join(base_dir, 'val')
+print(val_dir)
+
+
+#ADICIONADO
+for cl in classes:
+  img_path = os.path.join(base_dir, cl)
+  #print(img_path)
+  images = glob.glob(img_path + '/*')
+  #print(images)
+  print("{}: {} Images".format(cl, len(images)))
+  num_train = int(round(len(images)*0.8))
+  #print("num_train: "+str(num_train))
+  train, val = images[:num_train], images[num_train:]
+  #print(images[:num_train])
+  #print(images[num_train:])
+
+  for t in train:
+    if not os.path.exists(os.path.join(base_dir, 'train', cl)):
+      os.makedirs(os.path.join(base_dir, 'train', cl))
+    shutil.copy(t, os.path.join(base_dir, 'train', cl))
+
+  for v in val:
+    if not os.path.exists(os.path.join(base_dir, 'val', cl)):
+      os.makedirs(os.path.join(base_dir, 'val', cl))
+    shutil.copy(v, os.path.join(base_dir, 'val', cl))
+    
+    
+print(cl)
+print(img_path)
+print(images)
+print(len(images))
+print(num_train)
+
+
+train_extra_dir   = os.path.join(train_dir, 'extra')         # directory with our training extra pictures
+train_primera_dir = os.path.join(train_dir, 'primera')       # directory with our training muestra pictures
+train_segunda_dir = os.path.join(train_dir, 'segunda')       # directory with our training primera pictures
+train_muestra_dir = os.path.join(train_dir, 'muestra')       # directory with our training primera pictures7
+
+validation_extra_dir   = os.path.join(val_dir, 'extra')      # directory with our training extra pictures
+validation_primera_dir = os.path.join(val_dir, 'primera')    # directory with our training muestra pictures
+validation_segunda_dir = os.path.join(val_dir, 'segunda')    # directory with our training primera pictures
+#validation_muestra_dir = os.path.join(val_dir, 'muestra')    # directory with our training primera pictures
+
+
+
+#Understand the data
+num_extra_tr   = len(os.listdir(train_extra_dir))
+num_primera_tr = len(os.listdir(train_primera_dir))
+num_segunda_tr = len(os.listdir(train_segunda_dir))
+#num_muestra_tr = len(os.listdir(train_muestra_dir))
+
+num_extra_val   = len(os.listdir(validation_extra_dir))
+num_primera_val = len(os.listdir(validation_primera_dir))
+num_segunda_val = len(os.listdir(validation_segunda_dir))
+#num_muestra_val = len(os.listdir(validation_muestra_dir))
+
+
+total_train = num_extra_tr+ num_primera_tr +num_segunda_tr  
+total_val   = num_extra_val  + num_primera_val + num_segunda_val 
+
+print(total_train)
+print(total_val)
+
+
+batch_size = 120
+IMG_SHAPE= 224
+
+
+#pasar todas las imágenes de validación a array  PARA LA MATRIZ DE CONFUSIÓN
+val_all_image_generator = ImageDataGenerator(rescale=1./255) # Generator for our training data
+val_all_data_gen = val_all_image_generator.flow_from_directory(batch_size=201,
+                                                           directory=val_dir,
+                                                           shuffle=True,
+                                                           target_size=(IMG_SHAPE, IMG_SHAPE),
+                                                           class_mode='sparse')
+                                                           
+                                                           
+#Normalización de 0 a 1 y redimensionamiento de train
+train_image_generator = ImageDataGenerator(
+                    rescale=1./255,
+                    rotation_range=20,
+                    horizontal_flip=True,
+                    zoom_range=0.1
+                    ) # Generator for our training data
+train_data_gen = train_image_generator.flow_from_directory(batch_size=batch_size,
+                                                           directory=train_dir,
+                                                           shuffle=True,
+                                                           target_size=(IMG_SHAPE, IMG_SHAPE),
+                                                           class_mode='sparse')
+
+
+#Normalización de 0 a 1 y redimensionamiento de validation 
+validation_image_generator = ImageDataGenerator(rescale=1./255) # Generator for our validation data
+val_data_gen = validation_image_generator.flow_from_directory(batch_size=batch_size,
+                                                              directory=val_dir,
+                                                              target_size=(IMG_SHAPE, IMG_SHAPE),
+                                                              class_mode='sparse')
+                                                             
+#save to matrix of the images of training and save labes as np.array
+data_train,label_train=train_data_gen[0]
+data_train.shape
+type(data_train)
+
+
+#save to matrix of the images of training and save labes as np.array
+data_train,label_train=train_data_gen[0]
+
+
+# save to matrix of the images of validation and save labes as np.array
+data_val, label_val=val_data_gen[0]
+
+
+# save to matrix of the images of validation TO MATRIX CONFUSED and save labes as np.array
+data_val_all, label_val_all=val_all_data_gen[0]
+
+print(label_train[0])
+
+print(label_val[19])
+
+#Para el early stopping
+!pip install h5py
+
+
+#CODIGO PARA HACER TRANSFER SIN HUB 
+import keras
+from keras.applications import MobileNetV2
+from keras.applications.inception_v3 import InceptionV3
+
+Mobile = InceptionV3(weights = 'imagenet', include_top = False, input_shape = (224,224,3))
+#Mobile = MobileNetV2(weights = 'imagenet', include_top = False, input_shape = (224,224,3))
+
+
+for layer in Mobile.layers:
+  layer.trainable = False
+  
+  
+x=Mobile.output
+x=GlobalAveragePooling2D()(x)
+x=Dense(1024,activation='relu')(x) 
+x = Dropout(0.3)(x)
+#we add dense layers so that the model can learn more complex functions and classify for better results.
+preds=Dense(3,activation='softmax')(x) #final layer with softmax activation
+
+
+model = Model(inputs = Mobile.input, outputs = preds)
+
+
+lr = 1e-3
+optim = keras.optimizers.Adam(learning_rate=lr)
+
+model.compile(optimizer=optim,
+             loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+             #loss = "categorical_crossentropy",
+             metrics=['accuracy'])
+print(model.summary())
+
+
+
+#checkpoint_filepath = '../content/Mob_v1_BM/best_Model2.h5'
+
+callbacks_list = [
+    keras.callbacks.EarlyStopping(
+        monitor='val_accuracy',
+        patience=10,),
+    
+    keras.callbacks.ReduceLROnPlateau(
+        monitor='val_loss', 
+        factor=0.5, 
+        patience=4,
+        verbose=1,  
+        min_lr=1e-12),
+        
+    keras.callbacks.ModelCheckpoint(
+        #filepath=checkpoint_filepath,
+        filepath='model18-12-2020.h5', 
+        save_weights_only=True,
+        monitor='val_accuracy',
+        mode = 'max',
+        verbose=1, 
+        save_best_only=True)
+] 
+
+
+
+epochs = 100
+# simple early stopping
+from keras.callbacks import EarlyStopping
+#es = EarlyStopping(monitor='val_loss', mode='min', verbose=1)
+
+history = model.fit(
+    train_data_gen,
+    steps_per_epoch=int(np.ceil(train_data_gen.n / float(batch_size))),
+    epochs= epochs,
+    validation_data=val_data_gen,
+    validation_steps=int(np.ceil(val_data_gen.n / float(batch_size))),
+    callbacks=callbacks_list
+)
+
+
+history.history
+
+
+plt.plot(history.history['lr'])
+
+import matplotlib.pyplot as plt
+
+#plot trainning and validation accuracy values
+plt.plot(history.history['accuracy'])
+plt.plot(history.history['val_accuracy'])
+plt.title('Model accuracy')
+plt.ylabel('Accuracy')
+plt.xlabel('Epoch')
+plt.legend(['Train','Test'], loc='upper left')
+plt.show()
+
+#plot training and validation loss values
+plt.plot(history.history['loss'])
+plt.plot(history.history['val_loss'])
+plt.title('Model loss')
+plt.ylabel('Loss')
+plt.xlabel('Epoch')
+plt.legend(['Train','Test'], loc='upper left')
+plt.show()
+
+##plot confusion matrix
+! pip install mlxtend
+
+
+model.load_weights('model18-12-2020.h5')
+
+from mlxtend.plotting import plot_confusion_matrix
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import accuracy_score
+
+y_pred= np.argmax(model.predict(data_val_all), axis=-1)
+
+
+accuracy_score(label_val_all, y_pred)
+
+
+mat= confusion_matrix(label_val_all, y_pred)
+fig, ax= plot_confusion_matrix(conf_mat= mat, figsize=(10, 10), show_normed=True, cmap=plt.cm.Blues)
+
+
+from sklearn.metrics import classification_report
+print(classification_report(label_val_all,y_pred))
+
+#DATOS PARA EL TEST
+base_dir='/content/drive/MyDrive/NUEVAS_TEST_LOAD_MODEL'
+classes = ['extra', 'primera', 'segunda']
+type(classes)
+
+TEST_DATASET=os.path.join(base_dir)
+
+#Normalización de 0 a 1 y redimensionamiento 
+test_image_generator = ImageDataGenerator(rescale=1./255) # Generator for our validation data
+test_data_gen = test_image_generator.flow_from_directory(batch_size=batch_size,
+                                                              directory=base_dir,
+                                                              target_size=(IMG_SHAPE, IMG_SHAPE),
+                                                              class_mode='sparse')
+
+#save to matrix of the images of test and save labes as np.array
+test_train,label_test=test_data_gen[0]
+
+# ## Evaluar el modelo 
+# In[12]:
+#score = model.evaluate(data_test, label_test, verbose=0)
+
+#Evaluar el modelo
+score= model.evaluate(test_train,label_test,batch_size=batch_size,verbose=1)
+print('Test loss:', score[0])
+print('Test accuracy:', score[1]) 
+
+#Extraer las etiquetas de las predichas
+y_pred_t= np.argmax(model.predict(test_train), axis=-1)
+
+
+#Generar la matriz de confusión
+import seaborn as sns
+mat= confusion_matrix(label_test, y_pred_t)
+class_names = ['Extra', 'First', 'Second']
+fig, ax= plot_confusion_matrix(conf_mat= mat, figsize=(10,10), show_normed=True, colorbar=True,  cmap= plt.cm.Purples)
+sns.set(font_scale=3.0) #edited as suggested
+#sns.heatmap(fig,fmt="g");  # annot=True to annotate cells
+plt.title('CONFUSION MATRIX', size=20)
+tick_marcks= np.arange(len(classes))
+plt.xticks(tick_marcks, class_names, rotation=45, size=15, color= 'purple')
+plt.yticks(tick_marcks, class_names, rotation=45, size=15, color= 'purple')
+plt.ylabel('True Label', size=15, color= 'red')
+plt.xlabel('Predicted Label', size=15, color= 'red')
+
+print(classification_report(label_test,y_pred_t))
+
+model.save("modelo_googl_5:46_2311.h5")
+print("Saved model to disk")
